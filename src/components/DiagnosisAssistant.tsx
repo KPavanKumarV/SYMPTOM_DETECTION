@@ -16,7 +16,10 @@ import {
   TextSearch,
   ScanHeart,
   Expand,
-  PanelRight
+  PanelRight,
+  Volume2,
+  VolumeX,
+  Mic
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -65,6 +68,87 @@ export default function DiagnosisAssistant() {
   const [analyzing, setAnalyzing] = useState(false);
   const [showAllResults, setShowAllResults] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  
+  // Voice Assistant States
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
+
+  // Initialize Speech Synthesis
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      setSpeechSynthesis(window.speechSynthesis);
+      setIsVoiceEnabled(true);
+    }
+  }, []);
+
+  // Voice Assistant Functions
+  const stopSpeaking = useCallback(() => {
+    if (speechSynthesis) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, [speechSynthesis]);
+
+  const speakRecommendation = useCallback(() => {
+    if (!speechSynthesis || !selectedDisease || isSpeaking) return;
+
+    stopSpeaking();
+    setIsSpeaking(true);
+
+    const disease = selectedDisease.disease;
+    
+    // Create the voice message
+    const voiceMessage = `
+      Hello! I'm your AI Medical Voice Assistant.
+      
+      Based on your symptoms, the recommended treatment is: ${disease.medicine}
+      
+      Please remember, don't worry too much about your symptoms. While this information can be helpful, 
+      it's always best to consult with a qualified healthcare professional for proper diagnosis and treatment.
+      
+      Your health is important, and a doctor can provide personalized care based on your specific situation.
+      
+      Take care of yourself, and don't hesitate to seek medical attention if your symptoms worsen or persist.
+    `.trim();
+
+    const utterance = new SpeechSynthesisUtterance(voiceMessage);
+    
+    // Configure voice settings
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    // Try to use a pleasant voice
+    const voices = speechSynthesis.getVoices();
+    const preferredVoice = voices.find(voice => 
+      voice.name.includes('Female') || 
+      voice.name.includes('Samantha') ||
+      voice.name.includes('Karen') ||
+      voice.gender === 'female'
+    ) || voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      toast.success('Voice assistant is speaking...');
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      toast.success('Voice message completed');
+    };
+
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      toast.error('Voice synthesis failed');
+    };
+
+    speechSynthesis.speak(utterance);
+  }, [speechSynthesis, selectedDisease, isSpeaking, stopSpeaking]);
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -519,6 +603,29 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
                           <Clipboard className="w-4 h-4 mr-2" />
                           Copy
                         </Button>
+                        
+                        {/* Voice Assistant Button */}
+                        {isVoiceEnabled && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={isSpeaking ? stopSpeaking : speakRecommendation}
+                            className={isSpeaking ? "bg-green-50 border-green-200 text-green-700" : ""}
+                          >
+                            {isSpeaking ? (
+                              <>
+                                <VolumeX className="w-4 h-4 mr-2" />
+                                Stop Voice
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="w-4 h-4 mr-2" />
+                                Voice Assistant
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        
                         <Button variant="outline" size="sm" onClick={saveNote}>
                           Save Note
                         </Button>
@@ -530,6 +637,21 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
                           Report Issue
                         </Button>
                       </div>
+
+                      {/* Voice Assistant Info */}
+                      {isVoiceEnabled && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <Mic className="w-4 h-4 text-blue-600 mt-0.5" />
+                            <div className="text-sm text-blue-800">
+                              <p className="font-medium mb-1">AI Voice Assistant Available</p>
+                              <p className="text-xs text-blue-600">
+                                Click "Voice Assistant" to hear the treatment recommendations read aloud with reassuring guidance.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
