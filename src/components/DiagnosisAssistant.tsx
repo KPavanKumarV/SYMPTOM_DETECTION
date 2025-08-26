@@ -19,14 +19,29 @@ import {
   PanelRight,
   Volume2,
   VolumeX,
-  Mic
+  Mic,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DiseaseData {
-  name: string;
-  medicine: string;
-  symptoms: Record<string, boolean>;
+  id: number;
+  diseaseName: string;
+  medicineMeasures: string;
+  fever: boolean;
+  headache: boolean;
+  cough: boolean;
+  nausea: boolean;
+  vomiting: boolean;
+  chestPain: boolean;
+  breathlessness: boolean;
+  abdominalPain: boolean;
+  soreThroat: boolean;
+  runnyNose: boolean;
+  bodyAches: boolean;
+  sweating: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface MatchResult {
@@ -55,6 +70,22 @@ const SYMPTOM_SYNONYMS: Record<string, string[]> = {
   'chest': ['chest_pain', 'chest_discomfort'],
   'sweating': ['perspiration', 'sweat'],
   'runny_nose': ['nasal_discharge', 'stuffy_nose']
+};
+
+// Map component field names to API field names
+const SYMPTOM_FIELD_MAPPING: Record<string, string> = {
+  'fever': 'fever',
+  'headache': 'headache',
+  'cough': 'cough',
+  'nausea': 'nausea',
+  'vomiting': 'vomiting',
+  'chest_pain': 'chestPain',
+  'breathlessness': 'breathlessness',
+  'abdominal_pain': 'abdominalPain',
+  'sore_throat': 'soreThroat',
+  'runny_nose': 'runnyNose',
+  'body_aches': 'bodyAches',
+  'sweating': 'sweating'
 };
 
 export default function DiagnosisAssistant() {
@@ -102,7 +133,7 @@ export default function DiagnosisAssistant() {
     const voiceMessage = `
       Hello! I'm your AI Medical Voice Assistant.
       
-      Based on your symptoms, the recommended treatment is: ${disease.medicine}
+      Based on your symptoms, the recommended treatment is: ${disease.medicineMeasures}
       
       Please remember, don't worry too much about your symptoms. While this information can be helpful, 
       it's always best to consult with a qualified healthcare professional for proper diagnosis and treatment.
@@ -173,56 +204,30 @@ export default function DiagnosisAssistant() {
     }
   }, [recentSearches]);
 
-  // Load and parse CSV dataset
-  const loadDataset = useCallback(async () => {
+  // Load diseases from API
+  const loadDiseases = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Mock CSV data since we can't load external files in this context
-      const mockCsvData = `disease_name,medicine_measures,fever,headache,cough,nausea,vomiting,chest_pain,breathlessness,abdominal_pain,sore_throat,runny_nose,body_aches,sweating
-Common Cold,Rest and fluids. Take paracetamol for symptoms. Use nasal decongestants.,0,1,1,0,0,0,0,0,1,1,1,0
-Influenza,Antiviral medications within 48 hours. Rest and increase fluid intake.,1,1,1,1,0,0,0,0,1,1,1,1
-Food Poisoning,Oral rehydration therapy. Avoid solid foods initially. Seek medical help if severe.,0,1,0,1,1,0,0,1,0,0,1,0
-Heart Attack,EMERGENCY: Call 911 immediately. Chew aspirin if not allergic. Do not drive yourself.,0,0,0,1,0,1,1,0,0,0,0,1
-Gastritis,Avoid spicy foods. Take antacids. Eat small frequent meals.,0,1,0,1,1,0,0,1,0,0,0,0
-Bronchitis,Rest and fluids. Use humidifier. Cough suppressants may help.,0,1,1,0,0,0,1,0,0,0,1,0
-Anxiety Attack,Practice deep breathing. Remove from stressful environment. Consider counseling.,0,1,0,0,0,1,1,0,0,0,0,1
-Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1,0,0,0,0,0,1,0`;
-
-      const lines = mockCsvData.trim().split('\n');
-      const headers = lines[0].split(',');
-      
-      const parsedDiseases: DiseaseData[] = [];
-      
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        const disease: DiseaseData = {
-          name: values[0],
-          medicine: values[1],
-          symptoms: {}
-        };
-        
-        // Map symptom columns (starting from index 2)
-        for (let j = 2; j < headers.length; j++) {
-          const symptomName = headers[j].trim().toLowerCase();
-          disease.symptoms[symptomName] = values[j] === '1';
-        }
-        
-        parsedDiseases.push(disease);
+      const response = await fetch('/api/diseases?limit=100');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      setDiseases(parsedDiseases);
+      const data = await response.json();
+      setDiseases(data);
       setLoading(false);
     } catch (err) {
+      console.error('Failed to load diseases:', err);
       setError('Failed to load disease database. Please try again.');
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadDataset();
-  }, [loadDataset]);
+    loadDiseases();
+  }, [loadDiseases]);
 
   // Extract keywords and synonyms from prompt
   const extractKeywords = useCallback((text: string): string[] => {
@@ -250,38 +255,96 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
     return Array.from(keywords);
   }, []);
 
-  // Match symptoms against disease database
-  const matchDiseases = useCallback((keywords: string[]): MatchResult[] => {
-    const results: MatchResult[] = [];
-
-    diseases.forEach(disease => {
-      const matchedSymptoms: string[] = [];
-      let matchCount = 0;
-
-      keywords.forEach(keyword => {
-        Object.keys(disease.symptoms).forEach(symptom => {
-          if (disease.symptoms[symptom] && 
-              (symptom.includes(keyword) || keyword.includes(symptom))) {
-            matchedSymptoms.push(symptom);
-            matchCount++;
+  // Search diseases using API
+  const searchDiseasesBySymptoms = useCallback(async (keywords: string[]): Promise<DiseaseData[]> => {
+    try {
+      // Map keywords to proper field names for API
+      const mappedSymptoms = keywords
+        .map(keyword => {
+          // Direct match
+          if (SYMPTOM_FIELD_MAPPING[keyword]) {
+            return SYMPTOM_FIELD_MAPPING[keyword];
           }
-        });
+          
+          // Check for partial matches
+          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
+            key.includes(keyword) || keyword.includes(key.replace('_', ''))
+          );
+          
+          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
+        })
+        .filter(Boolean) as string[];
+
+      // Remove duplicates
+      const uniqueSymptoms = [...new Set(mappedSymptoms)];
+
+      if (uniqueSymptoms.length === 0) {
+        return [];
+      }
+
+      const response = await fetch('/api/diseases/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ symptoms: uniqueSymptoms }),
       });
 
-      if (matchCount > 0) {
-        const score = matchCount / keywords.length;
-        results.push({
-          disease,
-          score,
-          matchedSymptoms: [...new Set(matchedSymptoms)]
-        });
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
       }
-    });
 
-    return results.sort((a, b) => b.score - a.score);
-  }, [diseases]);
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      console.error('Disease search failed:', err);
+      toast.error('Failed to search diseases. Please try again.');
+      return [];
+    }
+  }, []);
 
-  // Analyze symptoms
+  // Convert API disease data to MatchResult format
+  const convertToMatchResults = useCallback((apiDiseases: DiseaseData[], keywords: string[]): MatchResult[] => {
+    return apiDiseases.map(disease => {
+      const matchedSymptoms: string[] = [];
+      
+      // Check which symptoms match
+      Object.entries(SYMPTOM_FIELD_MAPPING).forEach(([symptomKey, apiField]) => {
+        if (disease[apiField as keyof DiseaseData] === true) {
+          // Check if this symptom was in the original keywords
+          const isMatched = keywords.some(keyword => 
+            keyword.includes(symptomKey.replace('_', '')) || 
+            symptomKey.includes(keyword) ||
+            SYMPTOM_SYNONYMS[keyword]?.some(syn => syn.includes(symptomKey.replace('_', '')))
+          );
+          
+          if (isMatched) {
+            matchedSymptoms.push(symptomKey);
+          }
+        }
+      });
+
+      // Calculate score based on matched symptoms
+      const score = matchedSymptoms.length / Math.max(keywords.length, 1);
+
+      return {
+        disease: {
+          ...disease,
+          name: disease.diseaseName,
+          medicine: disease.medicineMeasures,
+          symptoms: Object.fromEntries(
+            Object.entries(SYMPTOM_FIELD_MAPPING).map(([key, apiField]) => [
+              key, disease[apiField as keyof DiseaseData] as boolean
+            ])
+          )
+        } as any,
+        score,
+        matchedSymptoms
+      };
+    }).sort((a, b) => b.score - a.score);
+  }, []);
+
+  // Analyze symptoms using API
   const analyzeSymptoms = useCallback(async () => {
     if (!prompt.trim()) {
       toast.error('Please enter your symptoms');
@@ -290,25 +353,30 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
 
     setAnalyzing(true);
     
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const keywords = extractKeywords(prompt);
+      setExtractedKeywords(keywords);
+      
+      const apiResults = await searchDiseasesBySymptoms(keywords);
+      const matchResults = convertToMatchResults(apiResults, keywords);
 
-    const keywords = extractKeywords(prompt);
-    const matchResults = matchDiseases(keywords);
+      setResults(matchResults);
+      setSelectedDisease(matchResults[0] || null);
+      
+      saveToRecentSearches(prompt);
 
-    setExtractedKeywords(keywords);
-    setResults(matchResults);
-    setSelectedDisease(matchResults[0] || null);
-    setAnalyzing(false);
-    
-    saveToRecentSearches(prompt);
-
-    if (matchResults.length === 0) {
-      toast.error('No matches found. Try mentioning specific symptoms like "fever", "cough", or "pain"');
-    } else {
-      toast.success(`Found ${matchResults.length} potential matches`);
+      if (matchResults.length === 0) {
+        toast.error('No matches found. Try mentioning specific symptoms like "fever", "cough", or "pain"');
+      } else {
+        toast.success(`Found ${matchResults.length} potential matches`);
+      }
+    } catch (err) {
+      toast.error('Analysis failed. Please try again.');
+      console.error('Analysis error:', err);
+    } finally {
+      setAnalyzing(false);
     }
-  }, [prompt, extractKeywords, matchDiseases, saveToRecentSearches]);
+  }, [prompt, extractKeywords, searchDiseasesBySymptoms, convertToMatchResults, saveToRecentSearches]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -341,7 +409,7 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
   // Copy recommendation
   const copyRecommendation = useCallback(() => {
     if (selectedDisease) {
-      const text = `Disease: ${selectedDisease.disease.name}\nRecommendation: ${selectedDisease.disease.medicine}`;
+      const text = `Disease: ${selectedDisease.disease.diseaseName}\nRecommendation: ${selectedDisease.disease.medicineMeasures}`;
       navigator.clipboard.writeText(text);
       toast.success('Recommendation copied to clipboard');
     }
@@ -351,8 +419,8 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
   const saveNote = useCallback(() => {
     if (selectedDisease && typeof window !== "undefined") {
       const note = {
-        disease: selectedDisease.disease.name,
-        medicine: selectedDisease.disease.medicine,
+        disease: selectedDisease.disease.diseaseName,
+        medicine: selectedDisease.disease.medicineMeasures,
         symptoms: selectedDisease.matchedSymptoms,
         timestamp: new Date().toISOString()
       };
@@ -390,8 +458,8 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
         <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
           <SearchX className="w-12 h-12 text-destructive" />
           <p className="text-destructive text-center">{error}</p>
-          <Button onClick={loadDataset} variant="outline">
-            <Component className="w-4 h-4 mr-2" />
+          <Button onClick={loadDiseases} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
             Retry
           </Button>
         </CardContent>
@@ -407,6 +475,9 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
         <CardTitle className="flex items-center gap-3">
           <ScanHeart className="w-6 h-6 text-primary" />
           Symptom Analysis Assistant
+          <Badge variant="outline" className="ml-auto">
+            {diseases.length} diseases in database
+          </Badge>
         </CardTitle>
         <p className="text-muted-foreground">
           Describe your symptoms in natural language for potential disease matches and recommendations.
@@ -517,16 +588,16 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
                   <div className="space-y-2">
                     {visibleResults.map((result, index) => (
                       <div
-                        key={index}
+                        key={result.disease.id || index}
                         className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedDisease?.disease.name === result.disease.name
+                          selectedDisease?.disease.id === result.disease.id
                             ? 'border-primary bg-accent'
                             : 'border-border hover:bg-muted'
                         }`}
                         onClick={() => setSelectedDisease(result)}
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <h5 className="font-medium">{result.disease.name}</h5>
+                          <h5 className="font-medium">{result.disease.diseaseName}</h5>
                           <Badge variant="secondary" className="text-xs">
                             {Math.round(result.score * 100)}%
                           </Badge>
@@ -577,7 +648,7 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
                     </div>
 
                     <div className="space-y-3">
-                      <h5 className="font-medium text-lg">{selectedDisease.disease.name}</h5>
+                      <h5 className="font-medium text-lg">{selectedDisease.disease.diseaseName}</h5>
                       
                       <div>
                         <h6 className="font-medium mb-2">Matched Symptoms</h6>
@@ -594,7 +665,7 @@ Migraine,Dark quiet room. Pain relievers. Apply cold compress to head.,0,1,0,1,1
                       <div>
                         <h6 className="font-medium mb-2">Recommended Actions</h6>
                         <p className="text-sm bg-muted p-3 rounded-lg">
-                          {selectedDisease.disease.medicine}
+                          {selectedDisease.disease.medicineMeasures}
                         </p>
                       </div>
 
