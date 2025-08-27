@@ -1,887 +1,367 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { 
-  Stethoscope, 
-  SearchX, 
-  Clipboard, 
-  Component, 
-  Thermometer,
-  TextSearch,
-  ScanHeart,
-  Expand,
-  PanelRight,
-  Volume2,
-  VolumeX,
-  Mic,
-  MicOff,
-  RefreshCw,
-  X
-} from 'lucide-react';
+import { Mic, MicOff, Search, X, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface DiseaseData {
-  id: number;
-  diseaseName: string;
-  medicineMeasures: string;
-  fever: boolean;
-  headache: boolean;
-  cough: boolean;
-  nausea: boolean;
-  vomiting: boolean;
-  chestPain: boolean;
-  breathlessness: boolean;
-  abdominalPain: boolean;
-  soreThroat: boolean;
-  runnyNose: boolean;
-  bodyAches: boolean;
-  sweating: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface MatchResult {
-  disease: DiseaseData;
-  score: number;
-  matchedSymptoms: string[];
-}
-
-const EXAMPLE_PROMPTS = [
-  "I have a high fever, headache, and body aches for the past 2 days",
-  "Experiencing chest pain, shortness of breath, and sweating",
-  "Stomach pain, nausea, and vomiting after eating",
-  "Persistent cough, sore throat, and runny nose"
-];
-
-const SYMPTOM_SYNONYMS: Record<string, string[]> = {
-  'fever': ['high_fever', 'mild_fever', 'temperature', 'hot'],
-  'headache': ['head_pain', 'migraine', 'head_ache'],
-  'cough': ['persistent_cough', 'dry_cough', 'wet_cough'],
-  'nausea': ['sick', 'queasy', 'upset_stomach'],
-  'vomiting': ['throwing_up', 'puking', 'sick'],
-  'pain': ['ache', 'hurt', 'sore'],
-  'breathing': ['breathlessness', 'shortness_of_breath', 'difficulty_breathing'],
-  'stomach': ['abdominal_pain', 'belly', 'tummy'],
-  'throat': ['sore_throat', 'throat_pain'],
-  'chest': ['chest_pain', 'chest_discomfort'],
-  'sweating': ['perspiration', 'sweat'],
-  'runny_nose': ['nasal_discharge', 'stuffy_nose']
-};
-
-// Map component field names to API field names
-const SYMPTOM_FIELD_MAPPING: Record<string, string> = {
-  'fever': 'fever',
-  'headache': 'headache',
-  'cough': 'cough',
-  'nausea': 'nausea',
-  'vomiting': 'vomiting',
-  'chest_pain': 'chestPain',
-  'breathlessness': 'breathlessness',
-  'abdominal_pain': 'abdominalPain',
-  'sore_throat': 'soreThroat',
-  'runny_nose': 'runnyNose',
-  'body_aches': 'bodyAches',
-  'sweating': 'sweating'
-};
-
-// Add hardcoded fallback data
-const FALLBACK_DISEASES: DiseaseData[] = [
+// Training dataset - you can replace this with your own dataset
+const TRAINING_DATASET = [
   {
     id: 1,
-    diseaseName: "Common Cold",
-    medicineMeasures: "Rest and fluids. Take paracetamol for symptoms. Use nasal decongestants.",
-    fever: false,
-    headache: true,
-    cough: true,
-    nausea: false,
-    vomiting: false,
-    chestPain: false,
-    breathlessness: false,
-    abdominalPain: false,
-    soreThroat: true,
-    runnyNose: true,
-    bodyAches: true,
-    sweating: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Common Cold",
+    medicine_measures: "Rest and fluids. Take paracetamol for symptoms. Use nasal decongestants.",
+    symptoms: {
+      fever: 0, headache: 1, cough: 1, nausea: 0, vomiting: 0, 
+      chest_pain: 0, breathlessness: 0, abdominal_pain: 0, 
+      sore_throat: 1, runny_nose: 1, body_aches: 1, sweating: 0
+    }
   },
   {
     id: 2,
-    diseaseName: "Influenza",
-    medicineMeasures: "Antiviral medications within 48 hours. Rest and increase fluid intake.",
-    fever: true,
-    headache: true,
-    cough: true,
-    nausea: true,
-    vomiting: false,
-    chestPain: false,
-    breathlessness: false,
-    abdominalPain: false,
-    soreThroat: true,
-    runnyNose: true,
-    bodyAches: true,
-    sweating: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Influenza",
+    medicine_measures: "Antiviral medications within 48 hours. Rest and increase fluid intake.",
+    symptoms: {
+      fever: 1, headache: 1, cough: 1, nausea: 1, vomiting: 0,
+      chest_pain: 0, breathlessness: 0, abdominal_pain: 0,
+      sore_throat: 1, runny_nose: 1, body_aches: 1, sweating: 1
+    }
   },
   {
     id: 3,
-    diseaseName: "Food Poisoning",
-    medicineMeasures: "Stay hydrated. Avoid solid foods initially. Seek medical attention if severe.",
-    fever: false,
-    headache: false,
-    cough: false,
-    nausea: true,
-    vomiting: true,
-    chestPain: false,
-    breathlessness: false,
-    abdominalPain: true,
-    soreThroat: false,
-    runnyNose: false,
-    bodyAches: false,
-    sweating: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Food Poisoning",
+    medicine_measures: "Stay hydrated with clear fluids. Avoid solid foods initially. Seek medical help if severe.",
+    symptoms: {
+      fever: 1, headache: 0, cough: 0, nausea: 1, vomiting: 1,
+      chest_pain: 0, breathlessness: 0, abdominal_pain: 1,
+      sore_throat: 0, runny_nose: 0, body_aches: 1, sweating: 1
+    }
   },
   {
     id: 4,
-    diseaseName: "Pneumonia",
-    medicineMeasures: "Antibiotics prescribed by doctor. Rest and monitor breathing closely.",
-    fever: true,
-    headache: true,
-    cough: true,
-    nausea: false,
-    vomiting: false,
-    chestPain: true,
-    breathlessness: true,
-    abdominalPain: false,
-    soreThroat: false,
-    runnyNose: false,
-    bodyAches: true,
-    sweating: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Pneumonia",
+    medicine_measures: "Antibiotics prescribed by doctor. Rest and adequate hydration. Monitor breathing.",
+    symptoms: {
+      fever: 1, headache: 1, cough: 1, nausea: 0, vomiting: 0,
+      chest_pain: 1, breathlessness: 1, abdominal_pain: 0,
+      sore_throat: 0, runny_nose: 0, body_aches: 1, sweating: 1
+    }
   },
   {
     id: 5,
-    diseaseName: "Migraine",
-    medicineMeasures: "Pain relievers and rest in dark, quiet room. Avoid triggers.",
-    fever: false,
-    headache: true,
-    cough: false,
-    nausea: true,
-    vomiting: true,
-    chestPain: false,
-    breathlessness: false,
-    abdominalPain: false,
-    soreThroat: false,
-    runnyNose: false,
-    bodyAches: false,
-    sweating: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Migraine",
+    medicine_measures: "Pain relievers and rest in dark, quiet room. Avoid triggers like bright lights.",
+    symptoms: {
+      fever: 0, headache: 1, cough: 0, nausea: 1, vomiting: 1,
+      chest_pain: 0, breathlessness: 0, abdominal_pain: 0,
+      sore_throat: 0, runny_nose: 0, body_aches: 0, sweating: 0
+    }
   },
   {
     id: 6,
-    diseaseName: "Gastroenteritis",
-    medicineMeasures: "Clear fluids and electrolyte replacement. BRAT diet when tolerated.",
-    fever: true,
-    headache: true,
-    cough: false,
-    nausea: true,
-    vomiting: true,
-    chestPain: false,
-    breathlessness: false,
-    abdominalPain: true,
-    soreThroat: false,
-    runnyNose: false,
-    bodyAches: true,
-    sweating: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Gastroenteritis",
+    medicine_measures: "Oral rehydration solutions. Avoid dairy and fatty foods. Gradual return to normal diet.",
+    symptoms: {
+      fever: 1, headache: 1, cough: 0, nausea: 1, vomiting: 1,
+      chest_pain: 0, breathlessness: 0, abdominal_pain: 1,
+      sore_throat: 0, runny_nose: 0, body_aches: 1, sweating: 0
+    }
   },
   {
     id: 7,
-    diseaseName: "Bronchitis",
-    medicineMeasures: "Cough suppressants and expectorants. Plenty of fluids and rest.",
-    fever: true,
-    headache: true,
-    cough: true,
-    nausea: false,
-    vomiting: false,
-    chestPain: true,
-    breathlessness: false,
-    abdominalPain: false,
-    soreThroat: true,
-    runnyNose: false,
-    bodyAches: true,
-    sweating: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Bronchitis",
+    medicine_measures: "Cough suppressants and expectorants. Stay hydrated. Avoid smoke and irritants.",
+    symptoms: {
+      fever: 1, headache: 1, cough: 1, nausea: 0, vomiting: 0,
+      chest_pain: 1, breathlessness: 1, abdominal_pain: 0,
+      sore_throat: 1, runny_nose: 0, body_aches: 1, sweating: 0
+    }
   },
   {
     id: 8,
-    diseaseName: "Angina",
-    medicineMeasures: "Nitroglycerin as prescribed. Rest and avoid physical exertion. Seek immediate medical care.",
-    fever: false,
-    headache: false,
-    cough: false,
-    nausea: true,
-    vomiting: false,
-    chestPain: true,
-    breathlessness: true,
-    abdominalPain: false,
-    soreThroat: false,
-    runnyNose: false,
-    bodyAches: false,
-    sweating: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    disease_name: "Angina",
+    medicine_measures: "Immediate rest and medication as prescribed. Seek urgent medical attention for chest pain.",
+    symptoms: {
+      fever: 0, headache: 0, cough: 0, nausea: 1, vomiting: 0,
+      chest_pain: 1, breathlessness: 1, abdominal_pain: 0,
+      sore_throat: 0, runny_nose: 0, body_aches: 0, sweating: 1
+    }
   }
 ];
 
+// Pattern recognition algorithm for symptom matching
+function calculateSymptomSimilarity(userSymptoms: string[], diseaseSymptoms: any): number {
+  const symptomKeywords = {
+    fever: ['fever', 'hot', 'temperature', 'burning', 'heat'],
+    headache: ['headache', 'head pain', 'migraine', 'head ache'],
+    cough: ['cough', 'coughing', 'throat clearing'],
+    nausea: ['nausea', 'nauseous', 'sick', 'queasy'],
+    vomiting: ['vomiting', 'vomit', 'throw up', 'throwing up'],
+    chest_pain: ['chest pain', 'chest ache', 'heart pain', 'chest discomfort'],
+    breathlessness: ['breathless', 'shortness of breath', 'breathing difficulty', 'cannot breathe'],
+    abdominal_pain: ['stomach ache', 'abdominal pain', 'belly pain', 'stomach pain'],
+    sore_throat: ['sore throat', 'throat pain', 'throat ache'],
+    runny_nose: ['runny nose', 'nasal discharge', 'stuffy nose', 'blocked nose'],
+    body_aches: ['body aches', 'muscle pain', 'joint pain', 'body pain'],
+    sweating: ['sweating', 'perspiration', 'sweats', 'night sweats']
+  };
+
+  let matchScore = 0;
+  let totalPossibleScore = 0;
+
+  const userText = userSymptoms.join(' ').toLowerCase();
+
+  Object.keys(symptomKeywords).forEach(symptom => {
+    totalPossibleScore += diseaseSymptoms[symptom];
+    
+    if (diseaseSymptoms[symptom] === 1) {
+      const keywords = symptomKeywords[symptom as keyof typeof symptomKeywords];
+      const hasMatch = keywords.some(keyword => userText.includes(keyword));
+      if (hasMatch) {
+        matchScore += 1;
+      }
+    }
+  });
+
+  return totalPossibleScore > 0 ? (matchScore / totalPossibleScore) * 100 : 0;
+}
+
+// Fuzzy string matching for better pattern recognition
+function fuzzyMatch(text: string, pattern: string): number {
+  const textLower = text.toLowerCase();
+  const patternLower = pattern.toLowerCase();
+  
+  if (textLower.includes(patternLower)) return 100;
+  
+  // Calculate Levenshtein distance for fuzzy matching
+  const matrix = Array(textLower.length + 1).fill(null).map(() => 
+    Array(patternLower.length + 1).fill(null)
+  );
+  
+  for (let i = 0; i <= textLower.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= patternLower.length; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= textLower.length; i++) {
+    for (let j = 1; j <= patternLower.length; j++) {
+      const cost = textLower[i-1] === patternLower[j-1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i-1][j] + 1,
+        matrix[i][j-1] + 1,
+        matrix[i-1][j-1] + cost
+      );
+    }
+  }
+  
+  const distance = matrix[textLower.length][patternLower.length];
+  const similarity = ((patternLower.length - distance) / patternLower.length) * 100;
+  return Math.max(0, similarity);
+}
+
 export default function DiagnosisAssistant() {
-  const [diseases, setDiseases] = useState<DiseaseData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [extractedKeywords, setExtractedKeywords] = useState<string[]>([]);
-  const [results, setResults] = useState<MatchResult[]>([]);
-  const [selectedDisease, setSelectedDisease] = useState<MatchResult | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [showAllResults, setShowAllResults] = useState(false);
+  const [symptoms, setSymptoms] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  
-  // Speech Recognition States
   const [isListening, setIsListening] = useState(false);
-  const [speechRecognition, setSpeechRecognition] = useState<SpeechRecognition | null>(null);
-  const [speechSupported, setSpeechSupported] = useState(false);
-  
-  // Text-to-Speech States
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
-
-  // Initialize Speech Recognition and Synthesis
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Speech Recognition
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-        
-        recognition.onstart = () => {
-          setIsListening(true);
-          toast.info('Listening... Speak your symptoms now');
-        };
-        
-        recognition.onresult = (event) => {
-          const transcript = event.results[0].transcript;
-          setPrompt(transcript);
-          toast.success('Speech recognized! Analyzing...');
-          
-          // Auto-analyze after speech recognition
-          setTimeout(() => {
-            analyzeSymptoms(transcript);
-          }, 500);
-        };
-        
-        recognition.onerror = (event) => {
-          setIsListening(false);
-          toast.error(`Speech recognition error: ${event.error}`);
-        };
-        
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-        
-        setSpeechRecognition(recognition);
-        setSpeechSupported(true);
-      }
-      
-      // Speech Synthesis
-      if ('speechSynthesis' in window) {
-        setSpeechSynthesis(window.speechSynthesis);
-      }
-    }
-  }, []);
-
-  // Speech Recognition Functions
-  const startListening = useCallback(() => {
-    if (speechRecognition && !isListening) {
-      speechRecognition.start();
-    }
-  }, [speechRecognition, isListening]);
-
-  const stopListening = useCallback(() => {
-    if (speechRecognition && isListening) {
-      speechRecognition.stop();
-      setIsListening(false);
-    }
-  }, [speechRecognition, isListening]);
-
-  // Text-to-Speech Functions
-  const speakAnalysis = useCallback((matchResults: MatchResult[]) => {
-    if (!speechSynthesis || isSpeaking) return;
-
-    let message = "Analysis complete. ";
-    
-    if (matchResults.length === 0) {
-      message += "No specific disease matches found for your symptoms. Please consult a healthcare professional for proper evaluation.";
-    } else {
-      const topResult = matchResults[0];
-      message += `Based on your symptoms, the most likely condition is ${topResult.disease.diseaseName} with a ${Math.round(topResult.score * 100)}% match. `;
-      message += `Recommended treatment: ${topResult.disease.medicineMeasures} `;
-      message += "Please remember, this is only a suggestion. Always consult with a healthcare professional for proper diagnosis and treatment.";
-    }
-
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    // Try to use a pleasant voice
-    const voices = speechSynthesis.getVoices();
-    const preferredVoice = voices.find(voice => 
-      voice.name.includes('Female') || 
-      voice.name.includes('Samantha') ||
-      voice.name.includes('Karen') ||
-      voice.gender === 'female'
-    ) || voices.find(voice => voice.lang.startsWith('en')) || voices[0];
-    
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-    }
-
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      toast.success('Reading analysis aloud...');
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-    };
-
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      toast.error('Speech synthesis failed');
-    };
-
-    speechSynthesis.speak(utterance);
-  }, [speechSynthesis, isSpeaking]);
-
-  const stopSpeaking = useCallback(() => {
-    if (speechSynthesis) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  }, [speechSynthesis]);
+  const [speechRecognition, setSpeechRecognition] = useState<any>(null);
 
   // Load recent searches from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem('diagnosis-recent-searches');
-      if (saved) {
-        try {
-          setRecentSearches(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to parse recent searches:', e);
-        }
-      }
+    const saved = localStorage.getItem('diagnosis-recent-searches');
+    if (saved) {
+      setRecentSearches(JSON.parse(saved));
     }
   }, []);
 
-  // Save to recent searches
-  const saveToRecentSearches = useCallback((search: string) => {
-    if (typeof window !== "undefined") {
-      const updated = [search, ...recentSearches.filter(s => s !== search)].slice(0, 5);
-      setRecentSearches(updated);
-      localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updated));
-    }
-  }, [recentSearches]);
-
-  // Delete from recent searches
-  const deleteFromRecentSearches = useCallback((searchToDelete: string) => {
-    if (typeof window !== "undefined") {
-      const updated = recentSearches.filter(s => s !== searchToDelete);
-      setRecentSearches(updated);
-      localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updated));
-      toast.success('Search deleted from history');
-    }
-  }, [recentSearches]);
-
-  // Load diseases from API
-  const loadDiseases = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setUsingFallback(false);
-      
-      const response = await fetch('/api/diseases?limit=100');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setDiseases(data);
-      setLoading(false);
-      toast.success('Database loaded successfully');
-    } catch (err) {
-      console.error('Failed to load diseases from API, using fallback data:', err);
-      
-      // Use fallback data
-      setDiseases(FALLBACK_DISEASES);
-      setUsingFallback(true);
-      setError(null);
-      setLoading(false);
-      
-      toast.warning('Using offline data - database connection will be restored after server restart');
-    }
-  }, []);
-
+  // Initialize speech recognition
   useEffect(() => {
-    loadDiseases();
-  }, [loadDiseases]);
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
 
-  // Extract keywords and synonyms from prompt
-  const extractKeywords = useCallback((text: string): string[] => {
-    const words = text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 2);
-
-    const keywords = new Set<string>();
-
-    words.forEach(word => {
-      // Add original word
-      keywords.add(word);
-      
-      // Add synonyms
-      Object.entries(SYMPTOM_SYNONYMS).forEach(([key, synonyms]) => {
-        if (synonyms.some(syn => syn.includes(word) || word.includes(key))) {
-          keywords.add(key);
-          synonyms.forEach(syn => keywords.add(syn));
-        }
-      });
-    });
-
-    return Array.from(keywords);
-  }, []);
-
-  // Search diseases using API
-  const searchDiseasesBySymptoms = useCallback(async (keywords: string[]): Promise<DiseaseData[]> => {
-    // If using fallback data, search locally
-    if (usingFallback) {
-      const mappedSymptoms = keywords
-        .map(keyword => {
-          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
-            key.includes(keyword) || keyword.includes(key.replace('_', ''))
-          );
-          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
-        })
-        .filter(Boolean) as string[];
-
-      const uniqueSymptoms = [...new Set(mappedSymptoms)];
-
-      if (uniqueSymptoms.length === 0) {
-        return [];
-      }
-
-      // Filter diseases that match the symptoms
-      return FALLBACK_DISEASES.filter(disease => {
-        return uniqueSymptoms.some(symptom => 
-          disease[symptom as keyof DiseaseData] === true
-        );
-      });
-    }
-
-    // Try API search first
-    try {
-      const mappedSymptoms = keywords
-        .map(keyword => {
-          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
-            key.includes(keyword) || keyword.includes(key.replace('_', ''))
-          );
-          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
-        })
-        .filter(Boolean) as string[];
-
-      const uniqueSymptoms = [...new Set(mappedSymptoms)];
-
-      if (uniqueSymptoms.length === 0) {
-        return [];
-      }
-
-      const response = await fetch('/api/diseases/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ symptoms: uniqueSymptoms }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      console.error('API search failed, using fallback:', err);
-      
-      // Fallback to local search
-      const mappedSymptoms = keywords
-        .map(keyword => {
-          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
-            key.includes(keyword) || keyword.includes(key.replace('_', ''))
-          );
-          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
-        })
-        .filter(Boolean) as string[];
-
-      const uniqueSymptoms = [...new Set(mappedSymptoms)];
-
-      return FALLBACK_DISEASES.filter(disease => {
-        return uniqueSymptoms.some(symptom => 
-          disease[symptom as keyof DiseaseData] === true
-        );
-      });
-    }
-  }, [usingFallback]);
-
-  // Convert API disease data to MatchResult format
-  const convertToMatchResults = useCallback((apiDiseases: DiseaseData[], keywords: string[]): MatchResult[] => {
-    return apiDiseases.map(disease => {
-      const matchedSymptoms: string[] = [];
-      
-      // Check which symptoms match
-      Object.entries(SYMPTOM_FIELD_MAPPING).forEach(([symptomKey, apiField]) => {
-        if (disease[apiField as keyof DiseaseData] === true) {
-          // Check if this symptom was in the original keywords
-          const isMatched = keywords.some(keyword => 
-            keyword.includes(symptomKey.replace('_', '')) || 
-            symptomKey.includes(keyword) ||
-            SYMPTOM_SYNONYMS[keyword]?.some(syn => syn.includes(symptomKey.replace('_', '')))
-          );
-          
-          if (isMatched) {
-            matchedSymptoms.push(symptomKey);
-          }
-        }
-      });
-
-      // Calculate score based on matched symptoms
-      const score = matchedSymptoms.length / Math.max(keywords.length, 1);
-
-      return {
-        disease: {
-          ...disease,
-          name: disease.diseaseName,
-          medicine: disease.medicineMeasures,
-          symptoms: Object.fromEntries(
-            Object.entries(SYMPTOM_FIELD_MAPPING).map(([key, apiField]) => [
-              key, disease[apiField as keyof DiseaseData] as boolean
-            ])
-          )
-        } as any,
-        score,
-        matchedSymptoms
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setSymptoms(transcript);
+        setIsListening(false);
+        
+        // Auto-analyze after speech input
+        setTimeout(() => {
+          analyzeSymptoms(transcript);
+        }, 500);
       };
-    }).sort((a, b) => b.score - a.score);
+
+      recognition.onerror = () => {
+        setIsListening(false);
+        toast.error('Speech recognition failed');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      setSpeechRecognition(recognition);
+    }
   }, []);
 
-  // Analyze symptoms using API (modified to accept optional text parameter)
-  const analyzeSymptoms = useCallback(async (textToAnalyze?: string) => {
-    const analysisText = textToAnalyze || prompt;
-    if (!analysisText.trim()) {
-      toast.error('Please enter your symptoms');
+  const toggleSpeechRecognition = () => {
+    if (!speechRecognition) {
+      toast.error('Speech recognition not supported');
       return;
     }
 
-    setAnalyzing(true);
+    if (isListening) {
+      speechRecognition.stop();
+      setIsListening(false);
+    } else {
+      speechRecognition.start();
+      setIsListening(true);
+      toast.success('Listening... Speak your symptoms');
+    }
+  };
+
+  const analyzeSymptoms = useCallback((inputSymptoms?: string) => {
+    const symptomsText = inputSymptoms || symptoms;
+    if (!symptomsText.trim()) {
+      toast.error('Please describe your symptoms');
+      return;
+    }
+
+    setIsAnalyzing(true);
     
-    try {
-      const keywords = extractKeywords(analysisText);
-      setExtractedKeywords(keywords);
+    // Pattern recognition analysis
+    setTimeout(() => {
+      const userSymptoms = symptomsText.toLowerCase().split(/[,.\s]+/).filter(s => s.length > 2);
       
-      const apiResults = await searchDiseasesBySymptoms(keywords);
-      const matchResults = convertToMatchResults(apiResults, keywords);
+      const analysisResults = TRAINING_DATASET.map(disease => {
+        const similarityScore = calculateSymptomSimilarity([symptomsText], disease.symptoms);
+        const fuzzyScore = fuzzyMatch(symptomsText, disease.disease_name);
+        const combinedScore = (similarityScore * 0.8) + (fuzzyScore * 0.2);
+        
+        return {
+          ...disease,
+          similarity: Math.round(combinedScore),
+          confidence: combinedScore > 60 ? 'High' : combinedScore > 30 ? 'Medium' : 'Low'
+        };
+      }).filter(result => result.similarity > 10)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 5);
 
-      setResults(matchResults);
-      setSelectedDisease(matchResults[0] || null);
-      
-      saveToRecentSearches(analysisText);
+      setResults(analysisResults);
+      setIsAnalyzing(false);
 
-      if (matchResults.length === 0) {
-        toast.error('No matches found. Try mentioning specific symptoms like "fever", "cough", or "pain"');
+      // Save to recent searches
+      const updatedSearches = [symptomsText, ...recentSearches.filter(s => s !== symptomsText)].slice(0, 5);
+      setRecentSearches(updatedSearches);
+      localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updatedSearches));
+
+      // Auto-read results aloud
+      if (analysisResults.length > 0) {
+        const topResult = analysisResults[0];
+        const message = `Based on your symptoms, the most likely condition is ${topResult.disease_name} with ${topResult.similarity}% similarity. ${topResult.medicine_measures} Please consult a healthcare provider for proper diagnosis.`;
+        
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(message);
+          utterance.rate = 0.9;
+          utterance.pitch = 1;
+          speechSynthesis.speak(utterance);
+        }
+        
+        toast.success(`Analysis complete - ${analysisResults.length} potential matches found`);
       } else {
-        toast.success(`Found ${matchResults.length} potential matches`);
+        toast.warning('No clear matches found. Please try describing symptoms differently.');
       }
+    }, 1500);
+  }, [symptoms, recentSearches]);
 
-      // Automatically speak the analysis results
-      setTimeout(() => {
-        speakAnalysis(matchResults);
-      }, 1000);
+  const deleteRecentSearch = (searchToDelete: string) => {
+    const updatedSearches = recentSearches.filter(search => search !== searchToDelete);
+    setRecentSearches(updatedSearches);
+    localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updatedSearches));
+    toast.success('Search removed from history');
+  };
 
-    } catch (err) {
-      toast.error('Analysis failed. Please try again.');
-      console.error('Analysis error:', err);
-    } finally {
-      setAnalyzing(false);
+  const speakResult = (text: string) => {
+    if ('speechSynthesis' in window) {
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      speechSynthesis.speak(utterance);
     }
-  }, [prompt, extractKeywords, searchDiseasesBySymptoms, convertToMatchResults, saveToRecentSearches, speakAnalysis]);
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        analyzeSymptoms();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [analyzeSymptoms]);
-
-  // Clear form
-  const clearForm = useCallback(() => {
-    setPrompt('');
-    setExtractedKeywords([]);
-    setResults([]);
-    setSelectedDisease(null);
-    setShowAllResults(false);
-    stopSpeaking();
-  }, [stopSpeaking]);
-
-  // Use example
-  const useExample = useCallback(() => {
-    const randomExample = EXAMPLE_PROMPTS[Math.floor(Math.random() * EXAMPLE_PROMPTS.length)];
-    setPrompt(randomExample);
-  }, []);
-
-  // Copy recommendation
-  const copyRecommendation = useCallback(() => {
-    if (selectedDisease) {
-      const text = `Disease: ${selectedDisease.disease.diseaseName}\nRecommendation: ${selectedDisease.disease.medicineMeasures}`;
-      navigator.clipboard.writeText(text);
-      toast.success('Recommendation copied to clipboard');
-    }
-  }, [selectedDisease]);
-
-  // Save note
-  const saveNote = useCallback(() => {
-    if (selectedDisease && typeof window !== "undefined") {
-      const note = {
-        disease: selectedDisease.disease.diseaseName,
-        medicine: selectedDisease.disease.medicineMeasures,
-        symptoms: selectedDisease.matchedSymptoms,
-        timestamp: new Date().toISOString()
-      };
-      
-      const saved = localStorage.getItem('diagnosis-notes') || '[]';
-      const notes = JSON.parse(saved);
-      notes.push(note);
-      localStorage.setItem('diagnosis-notes', JSON.stringify(notes));
-      
-      toast.success('Note saved successfully');
-    }
-  }, [selectedDisease]);
-
-  // Remove keyword
-  const removeKeyword = useCallback((keyword: string) => {
-    setExtractedKeywords(prev => prev.filter(k => k !== keyword));
-  }, []);
-
-  if (loading) {
-    return (
-      <Card className="w-full max-w-6xl mx-auto">
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="flex items-center gap-3">
-            <Stethoscope className="w-6 h-6 animate-pulse text-primary" />
-            <span className="text-muted-foreground">Loading medical database...</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="w-full max-w-6xl mx-auto">
-        <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-          <SearchX className="w-12 h-12 text-destructive" />
-          <p className="text-destructive text-center">{error}</p>
-          <Button onClick={loadDiseases} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const visibleResults = showAllResults ? results : results.slice(0, 5);
+  };
 
   return (
-    <Card className="w-full max-w-6xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3">
-          <ScanHeart className="w-6 h-6 text-primary" />
-          Symptom Analysis Assistant
-          {usingFallback && (
-            <Badge variant="secondary" className="text-xs">
-              Offline Mode
-            </Badge>
-          )}
-        </CardTitle>
-        <p className="text-muted-foreground">
-          Describe your symptoms in natural language or use voice input for instant analysis and recommendations.
-          {usingFallback && (
-            <span className="text-amber-600 text-sm block mt-1">
-              ⚠️ Using offline data - full database will be available after server restart
-            </span>
-          )}
-        </p>
-      </CardHeader>
-      
-      <CardContent className="space-y-6">
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Input Section */}
+    <div className="w-full max-w-4xl mx-auto space-y-6">
+      <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+        <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="space-y-3">
-              <label htmlFor="symptoms" className="text-sm font-medium">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800 mb-2">
                 Describe Your Symptoms
-              </label>
+              </h2>
               <div className="relative">
                 <Textarea
-                  id="symptoms"
-                  placeholder="Example: I have a high fever, headache, and body aches for the past 2 days..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={6}
-                  className="resize-none pr-12"
+                  placeholder="Example: I have fever, headache, and cough for 2 days..."
+                  value={symptoms}
+                  onChange={(e) => setSymptoms(e.target.value)}
+                  className="min-h-[100px] pr-12 resize-none"
                 />
-                {/* Speech Recognition Button */}
-                {speechSupported && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`absolute top-2 right-2 p-2 ${
-                      isListening 
-                        ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                    }`}
-                    onClick={isListening ? stopListening : startListening}
-                    disabled={analyzing}
-                  >
-                    {isListening ? (
-                      <MicOff className="w-4 h-4" />
-                    ) : (
-                      <Mic className="w-4 h-4" />
-                    )}
-                  </Button>
-                )}
-              </div>
-              {speechSupported && (
-                <p className="text-xs text-muted-foreground">
-                  💡 Click the microphone button to speak your symptoms directly
-                </p>
-              )}
-            </div>
-
-            {/* Extracted Keywords */}
-            {extractedKeywords.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Detected Symptoms</label>
-                <div className="flex flex-wrap gap-2">
-                  {extractedKeywords.map((keyword, index) => (
-                    <Badge
-                      key={index}
-                      variant="secondary"
-                      className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => removeKeyword(keyword)}
-                    >
-                      {keyword.replace('_', ' ')} ✕
-                    </Badge>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Click on symptoms to remove them before analyzing
-                </p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={() => analyzeSymptoms()}
-                disabled={analyzing || !prompt.trim()}
-                className="min-w-32"
-              >
-                {analyzing ? (
-                  <>
-                    <TextSearch className="w-4 h-4 mr-2 animate-pulse" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <TextSearch className="w-4 h-4 mr-2" />
-                    Analyze
-                  </>
-                )}
-              </Button>
-              
-              <Button variant="outline" onClick={clearForm}>
-                Clear
-              </Button>
-              
-              <Button variant="ghost" onClick={useExample}>
-                Use Example
-              </Button>
-
-              {/* Stop Speaking Button */}
-              {isSpeaking && (
-                <Button variant="outline" onClick={stopSpeaking}>
-                  <VolumeX className="w-4 h-4 mr-2" />
-                  Stop Reading
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`absolute top-2 right-2 h-8 w-8 p-0 ${
+                    isListening ? 'text-red-500' : 'text-slate-500 hover:text-teal-600'
+                  }`}
+                  onClick={toggleSpeechRecognition}
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </Button>
-              )}
+              </div>
             </div>
 
-            {/* Recent Searches */}
+            <Button
+              onClick={() => analyzeSymptoms()}
+              disabled={isAnalyzing || !symptoms.trim()}
+              className="w-full bg-teal-600 hover:bg-teal-700"
+            >
+              {isAnalyzing ? (
+                <>Analyzing symptoms...</>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Analyze Symptoms
+                </>
+              )}
+            </Button>
+
             {recentSearches.length > 0 && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Recent Searches</label>
-                <div className="space-y-1">
+                <h3 className="text-sm font-medium text-slate-600">Recent Searches</h3>
+                <div className="flex flex-wrap gap-2">
                   {recentSearches.map((search, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 p-2 rounded hover:bg-muted group"
-                    >
-                      <button
-                        onClick={() => setPrompt(search)}
-                        className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate"
+                    <div key={index} className="group relative">
+                      <Badge
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-slate-200 pr-6"
+                        onClick={() => setSymptoms(search)}
                       >
-                        {search}
-                      </button>
+                        {search.length > 30 ? `${search.substring(0, 30)}...` : search}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                        onClick={() => deleteFromRecentSearches(search)}
+                        className="absolute -top-1 -right-1 h-4 w-4 p-0 opacity-0 group-hover:opacity-100 bg-red-100 hover:bg-red-200 text-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteRecentSearch(search);
+                        }}
                       >
-                        <X className="w-3 h-3" />
+                        <X className="h-3 w-3" />
                       </Button>
                     </div>
                   ))}
@@ -889,159 +369,47 @@ export default function DiagnosisAssistant() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Results Section */}
-          <div className="space-y-4">
-            {results.length > 0 ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Analysis Results</h4>
-                  <Badge variant="outline">
-                    {results.length} matches
-                  </Badge>
+      {results.length > 0 && (
+        <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">
+              Analysis Results ({results.length} matches found)
+            </h3>
+            <div className="space-y-4">
+              {results.map((result) => (
+                <div key={result.id} className="border rounded-lg p-4 bg-slate-50/50">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h4 className="font-semibold text-slate-800">{result.disease_name}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant={result.confidence === 'High' ? 'default' : 'secondary'}>
+                          {result.similarity}% Match
+                        </Badge>
+                        <Badge variant="outline">{result.confidence} Confidence</Badge>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => speakResult(`${result.disease_name}. ${result.medicine_measures}`)}
+                      className="text-slate-500 hover:text-teal-600"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    <span className="font-medium">Treatment: </span>
+                    {result.medicine_measures}
+                  </p>
                 </div>
-
-                {/* Results List */}
-                <ScrollArea className="h-64">
-                  <div className="space-y-2">
-                    {visibleResults.map((result, index) => (
-                      <div
-                        key={result.disease.id || index}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedDisease?.disease.id === result.disease.id
-                            ? 'border-primary bg-accent'
-                            : 'border-border hover:bg-muted'
-                        }`}
-                        onClick={() => setSelectedDisease(result)}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h5 className="font-medium">{result.disease.diseaseName}</h5>
-                          <Badge variant="secondary" className="text-xs">
-                            {Math.round(result.score * 100)}%
-                          </Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {result.matchedSymptoms.slice(0, 3).map((symptom, i) => (
-                            <Badge key={i} variant="outline" className="text-xs">
-                              {symptom.replace('_', ' ')}
-                            </Badge>
-                          ))}
-                          {result.matchedSymptoms.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{result.matchedSymptoms.length - 3} more
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground flex items-center">
-                          <PanelRight className="w-3 h-3 mr-1" />
-                          Click for details
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-
-                {results.length > 5 && !showAllResults && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAllResults(true)}
-                    className="w-full"
-                  >
-                    <Expand className="w-4 h-4 mr-2" />
-                    Show {results.length - 5} more results
-                  </Button>
-                )}
-
-                <Separator />
-
-                {/* Disease Detail */}
-                {selectedDisease && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">Disease Details</h4>
-                      <Badge>
-                        {Math.round(selectedDisease.score * 100)}% match
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h5 className="font-medium text-lg">{selectedDisease.disease.diseaseName}</h5>
-                      
-                      <div>
-                        <h6 className="font-medium mb-2">Matched Symptoms</h6>
-                        <div className="flex flex-wrap gap-1">
-                          {selectedDisease.matchedSymptoms.map((symptom, i) => (
-                            <Badge key={i} variant="secondary">
-                              <Thermometer className="w-3 h-3 mr-1" />
-                              {symptom.replace('_', ' ')}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h6 className="font-medium mb-2">Recommended Actions</h6>
-                        <p className="text-sm bg-muted p-3 rounded-lg">
-                          {selectedDisease.disease.medicineMeasures}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={copyRecommendation}>
-                          <Clipboard className="w-4 h-4 mr-2" />
-                          Copy
-                        </Button>
-                        
-                        <Button variant="outline" size="sm" onClick={saveNote}>
-                          Save Note
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => toast.info('This feature helps improve our database accuracy')}
-                        >
-                          Report Issue
-                        </Button>
-                      </div>
-
-                      {/* Voice Features Info */}
-                      {speechSupported && (
-                        <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <Volume2 className="w-4 h-4 text-blue-600 mt-0.5" />
-                            <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">🎤 Voice-Enabled Analysis</p>
-                              <p className="text-xs text-blue-600">
-                                Use the microphone button to speak your symptoms. Analysis results will be automatically read aloud!
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : extractedKeywords.length > 0 && !analyzing ? (
-              <div className="text-center py-12">
-                <SearchX className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-2">No matches found</p>
-                <p className="text-sm text-muted-foreground">
-                  Try mentioning symptoms like "fever", "cough", "pain", or "nausea"
-                </p>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Stethoscope className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  Enter your symptoms to get started
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

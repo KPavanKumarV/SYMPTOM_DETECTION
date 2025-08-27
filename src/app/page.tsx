@@ -1,5 +1,5 @@
 import DiagnosisAssistant from '@/components/DiagnosisAssistant';
-import { Stethoscope, Database, AlertTriangle } from 'lucide-react';
+import { Stethoscope, Brain, AlertTriangle } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -17,13 +17,13 @@ export default function HomePage() {
                   Medical Diagnosis Assistant
                 </h1>
                 <p className="text-sm text-slate-600">
-                  AI-powered symptom analysis and disease suggestion
+                  AI-powered symptom analysis with pattern recognition
                 </p>
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-              <Database className="w-4 h-4" />
-              <span>Medical Database v2.1</span>
+              <Brain className="w-4 h-4" />
+              <span>Pattern Recognition v3.0</span>
             </div>
           </div>
         </div>
@@ -59,8 +59,8 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-4 text-sm text-slate-600">
               <div className="flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                <span>Dataset: Medical Symptoms Database 2024</span>
+                <Brain className="w-4 h-4" />
+                <span>Powered by Advanced Pattern Recognition</span>
               </div>
             </div>
           </div>
