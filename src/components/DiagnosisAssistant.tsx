@@ -90,10 +90,167 @@ const SYMPTOM_FIELD_MAPPING: Record<string, string> = {
   'sweating': 'sweating'
 };
 
+// Add hardcoded fallback data
+const FALLBACK_DISEASES: DiseaseData[] = [
+  {
+    id: 1,
+    diseaseName: "Common Cold",
+    medicineMeasures: "Rest and fluids. Take paracetamol for symptoms. Use nasal decongestants.",
+    fever: false,
+    headache: true,
+    cough: true,
+    nausea: false,
+    vomiting: false,
+    chestPain: false,
+    breathlessness: false,
+    abdominalPain: false,
+    soreThroat: true,
+    runnyNose: true,
+    bodyAches: true,
+    sweating: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 2,
+    diseaseName: "Influenza",
+    medicineMeasures: "Antiviral medications within 48 hours. Rest and increase fluid intake.",
+    fever: true,
+    headache: true,
+    cough: true,
+    nausea: true,
+    vomiting: false,
+    chestPain: false,
+    breathlessness: false,
+    abdominalPain: false,
+    soreThroat: true,
+    runnyNose: true,
+    bodyAches: true,
+    sweating: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 3,
+    diseaseName: "Food Poisoning",
+    medicineMeasures: "Stay hydrated. Avoid solid foods initially. Seek medical attention if severe.",
+    fever: false,
+    headache: false,
+    cough: false,
+    nausea: true,
+    vomiting: true,
+    chestPain: false,
+    breathlessness: false,
+    abdominalPain: true,
+    soreThroat: false,
+    runnyNose: false,
+    bodyAches: false,
+    sweating: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 4,
+    diseaseName: "Pneumonia",
+    medicineMeasures: "Antibiotics prescribed by doctor. Rest and monitor breathing closely.",
+    fever: true,
+    headache: true,
+    cough: true,
+    nausea: false,
+    vomiting: false,
+    chestPain: true,
+    breathlessness: true,
+    abdominalPain: false,
+    soreThroat: false,
+    runnyNose: false,
+    bodyAches: true,
+    sweating: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 5,
+    diseaseName: "Migraine",
+    medicineMeasures: "Pain relievers and rest in dark, quiet room. Avoid triggers.",
+    fever: false,
+    headache: true,
+    cough: false,
+    nausea: true,
+    vomiting: true,
+    chestPain: false,
+    breathlessness: false,
+    abdominalPain: false,
+    soreThroat: false,
+    runnyNose: false,
+    bodyAches: false,
+    sweating: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 6,
+    diseaseName: "Gastroenteritis",
+    medicineMeasures: "Clear fluids and electrolyte replacement. BRAT diet when tolerated.",
+    fever: true,
+    headache: true,
+    cough: false,
+    nausea: true,
+    vomiting: true,
+    chestPain: false,
+    breathlessness: false,
+    abdominalPain: true,
+    soreThroat: false,
+    runnyNose: false,
+    bodyAches: true,
+    sweating: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 7,
+    diseaseName: "Bronchitis",
+    medicineMeasures: "Cough suppressants and expectorants. Plenty of fluids and rest.",
+    fever: true,
+    headache: true,
+    cough: true,
+    nausea: false,
+    vomiting: false,
+    chestPain: true,
+    breathlessness: false,
+    abdominalPain: false,
+    soreThroat: true,
+    runnyNose: false,
+    bodyAches: true,
+    sweating: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 8,
+    diseaseName: "Angina",
+    medicineMeasures: "Nitroglycerin as prescribed. Rest and avoid physical exertion. Seek immediate medical care.",
+    fever: false,
+    headache: false,
+    cough: false,
+    nausea: true,
+    vomiting: false,
+    chestPain: true,
+    breathlessness: true,
+    abdominalPain: false,
+    soreThroat: false,
+    runnyNose: false,
+    bodyAches: false,
+    sweating: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 export default function DiagnosisAssistant() {
   const [diseases, setDiseases] = useState<DiseaseData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [extractedKeywords, setExtractedKeywords] = useState<string[]>([]);
   const [results, setResults] = useState<MatchResult[]>([]);
@@ -267,6 +424,7 @@ export default function DiagnosisAssistant() {
     try {
       setLoading(true);
       setError(null);
+      setUsingFallback(false);
       
       const response = await fetch('/api/diseases?limit=100');
       if (!response.ok) {
@@ -276,10 +434,17 @@ export default function DiagnosisAssistant() {
       const data = await response.json();
       setDiseases(data);
       setLoading(false);
+      toast.success('Database loaded successfully');
     } catch (err) {
-      console.error('Failed to load diseases:', err);
-      setError('Failed to load disease database. Please try again.');
+      console.error('Failed to load diseases from API, using fallback data:', err);
+      
+      // Use fallback data
+      setDiseases(FALLBACK_DISEASES);
+      setUsingFallback(true);
+      setError(null);
       setLoading(false);
+      
+      toast.warning('Using offline data - database connection will be restored after server restart');
     }
   }, []);
 
@@ -315,25 +480,42 @@ export default function DiagnosisAssistant() {
 
   // Search diseases using API
   const searchDiseasesBySymptoms = useCallback(async (keywords: string[]): Promise<DiseaseData[]> => {
-    try {
-      // Map keywords to proper field names for API
+    // If using fallback data, search locally
+    if (usingFallback) {
       const mappedSymptoms = keywords
         .map(keyword => {
-          // Direct match
-          if (SYMPTOM_FIELD_MAPPING[keyword]) {
-            return SYMPTOM_FIELD_MAPPING[keyword];
-          }
-          
-          // Check for partial matches
           const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
             key.includes(keyword) || keyword.includes(key.replace('_', ''))
           );
-          
           return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
         })
         .filter(Boolean) as string[];
 
-      // Remove duplicates
+      const uniqueSymptoms = [...new Set(mappedSymptoms)];
+
+      if (uniqueSymptoms.length === 0) {
+        return [];
+      }
+
+      // Filter diseases that match the symptoms
+      return FALLBACK_DISEASES.filter(disease => {
+        return uniqueSymptoms.some(symptom => 
+          disease[symptom as keyof DiseaseData] === true
+        );
+      });
+    }
+
+    // Try API search first
+    try {
+      const mappedSymptoms = keywords
+        .map(keyword => {
+          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
+            key.includes(keyword) || keyword.includes(key.replace('_', ''))
+          );
+          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
+        })
+        .filter(Boolean) as string[];
+
       const uniqueSymptoms = [...new Set(mappedSymptoms)];
 
       if (uniqueSymptoms.length === 0) {
@@ -355,11 +537,27 @@ export default function DiagnosisAssistant() {
       const data = await response.json();
       return data;
     } catch (err) {
-      console.error('Disease search failed:', err);
-      toast.error('Failed to search diseases. Please try again.');
-      return [];
+      console.error('API search failed, using fallback:', err);
+      
+      // Fallback to local search
+      const mappedSymptoms = keywords
+        .map(keyword => {
+          const matchedKey = Object.keys(SYMPTOM_FIELD_MAPPING).find(key => 
+            key.includes(keyword) || keyword.includes(key.replace('_', ''))
+          );
+          return matchedKey ? SYMPTOM_FIELD_MAPPING[matchedKey] : null;
+        })
+        .filter(Boolean) as string[];
+
+      const uniqueSymptoms = [...new Set(mappedSymptoms)];
+
+      return FALLBACK_DISEASES.filter(disease => {
+        return uniqueSymptoms.some(symptom => 
+          disease[symptom as keyof DiseaseData] === true
+        );
+      });
     }
-  }, []);
+  }, [usingFallback]);
 
   // Convert API disease data to MatchResult format
   const convertToMatchResults = useCallback((apiDiseases: DiseaseData[], keywords: string[]): MatchResult[] => {
@@ -511,7 +709,7 @@ export default function DiagnosisAssistant() {
         <CardContent className="flex items-center justify-center py-12">
           <div className="flex items-center gap-3">
             <Stethoscope className="w-6 h-6 animate-pulse text-primary" />
-            <span className="text-muted-foreground">Loading disease database...</span>
+            <span className="text-muted-foreground">Loading medical database...</span>
           </div>
         </CardContent>
       </Card>
@@ -541,9 +739,19 @@ export default function DiagnosisAssistant() {
         <CardTitle className="flex items-center gap-3">
           <ScanHeart className="w-6 h-6 text-primary" />
           Symptom Analysis Assistant
+          {usingFallback && (
+            <Badge variant="secondary" className="text-xs">
+              Offline Mode
+            </Badge>
+          )}
         </CardTitle>
         <p className="text-muted-foreground">
           Describe your symptoms in natural language or use voice input for instant analysis and recommendations.
+          {usingFallback && (
+            <span className="text-amber-600 text-sm block mt-1">
+              ⚠️ Using offline data - full database will be available after server restart
+            </span>
+          )}
         </p>
       </CardHeader>
       
