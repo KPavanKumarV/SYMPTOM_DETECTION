@@ -3,13 +3,13 @@ import { Stethoscope, Database, AlertTriangle } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-teal-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-teal-100 rounded-lg">
+              <div className="p-2 bg-gradient-to-br from-teal-100 to-blue-100 rounded-lg">
                 <Stethoscope className="w-6 h-6 text-teal-600" />
               </div>
               <div>
@@ -62,11 +62,6 @@ export default function HomePage() {
                 <Database className="w-4 h-4" />
                 <span>Dataset: Medical Symptoms Database 2024</span>
               </div>
-              <div className="hidden sm:block w-px h-4 bg-slate-300"></div>
-              <span className="hidden sm:inline">8 conditions • 13 symptoms</span>
-            </div>
-            <div className="text-xs text-slate-500">
-              <p>For educational and research purposes only</p>
             </div>
           </div>
         </div>

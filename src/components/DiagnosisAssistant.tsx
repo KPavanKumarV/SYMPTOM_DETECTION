@@ -20,7 +20,9 @@ import {
   Volume2,
   VolumeX,
   Mic,
-  RefreshCw
+  MicOff,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -100,56 +102,96 @@ export default function DiagnosisAssistant() {
   const [showAllResults, setShowAllResults] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   
-  // Voice Assistant States
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  // Speech Recognition States
+  const [isListening, setIsListening] = useState(false);
+  const [speechRecognition, setSpeechRecognition] = useState<SpeechRecognition | null>(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  
+  // Text-to-Speech States
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
 
-  // Initialize Speech Synthesis
+  // Initialize Speech Recognition and Synthesis
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      setSpeechSynthesis(window.speechSynthesis);
-      setIsVoiceEnabled(true);
+    if (typeof window !== 'undefined') {
+      // Speech Recognition
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        recognition.onstart = () => {
+          setIsListening(true);
+          toast.info('Listening... Speak your symptoms now');
+        };
+        
+        recognition.onresult = (event) => {
+          const transcript = event.results[0].transcript;
+          setPrompt(transcript);
+          toast.success('Speech recognized! Analyzing...');
+          
+          // Auto-analyze after speech recognition
+          setTimeout(() => {
+            analyzeSymptoms(transcript);
+          }, 500);
+        };
+        
+        recognition.onerror = (event) => {
+          setIsListening(false);
+          toast.error(`Speech recognition error: ${event.error}`);
+        };
+        
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+        
+        setSpeechRecognition(recognition);
+        setSpeechSupported(true);
+      }
+      
+      // Speech Synthesis
+      if ('speechSynthesis' in window) {
+        setSpeechSynthesis(window.speechSynthesis);
+      }
     }
   }, []);
 
-  // Voice Assistant Functions
-  const stopSpeaking = useCallback(() => {
-    if (speechSynthesis) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
+  // Speech Recognition Functions
+  const startListening = useCallback(() => {
+    if (speechRecognition && !isListening) {
+      speechRecognition.start();
     }
-  }, [speechSynthesis]);
+  }, [speechRecognition, isListening]);
 
-  const speakRecommendation = useCallback(() => {
-    if (!speechSynthesis || !selectedDisease || isSpeaking) return;
+  const stopListening = useCallback(() => {
+    if (speechRecognition && isListening) {
+      speechRecognition.stop();
+      setIsListening(false);
+    }
+  }, [speechRecognition, isListening]);
 
-    stopSpeaking();
-    setIsSpeaking(true);
+  // Text-to-Speech Functions
+  const speakAnalysis = useCallback((matchResults: MatchResult[]) => {
+    if (!speechSynthesis || isSpeaking) return;
 
-    const disease = selectedDisease.disease;
+    let message = "Analysis complete. ";
     
-    // Create the voice message
-    const voiceMessage = `
-      Hello! I'm your AI Medical Voice Assistant.
-      
-      Based on your symptoms, the recommended treatment is: ${disease.medicineMeasures}
-      
-      Please remember, don't worry too much about your symptoms. While this information can be helpful, 
-      it's always best to consult with a qualified healthcare professional for proper diagnosis and treatment.
-      
-      Your health is important, and a doctor can provide personalized care based on your specific situation.
-      
-      Take care of yourself, and don't hesitate to seek medical attention if your symptoms worsen or persist.
-    `.trim();
+    if (matchResults.length === 0) {
+      message += "No specific disease matches found for your symptoms. Please consult a healthcare professional for proper evaluation.";
+    } else {
+      const topResult = matchResults[0];
+      message += `Based on your symptoms, the most likely condition is ${topResult.disease.diseaseName} with a ${Math.round(topResult.score * 100)}% match. `;
+      message += `Recommended treatment: ${topResult.disease.medicineMeasures} `;
+      message += "Please remember, this is only a suggestion. Always consult with a healthcare professional for proper diagnosis and treatment.";
+    }
 
-    const utterance = new SpeechSynthesisUtterance(voiceMessage);
-    
-    // Configure voice settings
+    const utterance = new SpeechSynthesisUtterance(message);
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
-    
+
     // Try to use a pleasant voice
     const voices = speechSynthesis.getVoices();
     const preferredVoice = voices.find(voice => 
@@ -165,21 +207,27 @@ export default function DiagnosisAssistant() {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      toast.success('Voice assistant is speaking...');
+      toast.success('Reading analysis aloud...');
     };
 
     utterance.onend = () => {
       setIsSpeaking(false);
-      toast.success('Voice message completed');
     };
 
     utterance.onerror = () => {
       setIsSpeaking(false);
-      toast.error('Voice synthesis failed');
+      toast.error('Speech synthesis failed');
     };
 
     speechSynthesis.speak(utterance);
-  }, [speechSynthesis, selectedDisease, isSpeaking, stopSpeaking]);
+  }, [speechSynthesis, isSpeaking]);
+
+  const stopSpeaking = useCallback(() => {
+    if (speechSynthesis) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, [speechSynthesis]);
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -201,6 +249,16 @@ export default function DiagnosisAssistant() {
       const updated = [search, ...recentSearches.filter(s => s !== search)].slice(0, 5);
       setRecentSearches(updated);
       localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updated));
+    }
+  }, [recentSearches]);
+
+  // Delete from recent searches
+  const deleteFromRecentSearches = useCallback((searchToDelete: string) => {
+    if (typeof window !== "undefined") {
+      const updated = recentSearches.filter(s => s !== searchToDelete);
+      setRecentSearches(updated);
+      localStorage.setItem('diagnosis-recent-searches', JSON.stringify(updated));
+      toast.success('Search deleted from history');
     }
   }, [recentSearches]);
 
@@ -344,9 +402,10 @@ export default function DiagnosisAssistant() {
     }).sort((a, b) => b.score - a.score);
   }, []);
 
-  // Analyze symptoms using API
-  const analyzeSymptoms = useCallback(async () => {
-    if (!prompt.trim()) {
+  // Analyze symptoms using API (modified to accept optional text parameter)
+  const analyzeSymptoms = useCallback(async (textToAnalyze?: string) => {
+    const analysisText = textToAnalyze || prompt;
+    if (!analysisText.trim()) {
       toast.error('Please enter your symptoms');
       return;
     }
@@ -354,7 +413,7 @@ export default function DiagnosisAssistant() {
     setAnalyzing(true);
     
     try {
-      const keywords = extractKeywords(prompt);
+      const keywords = extractKeywords(analysisText);
       setExtractedKeywords(keywords);
       
       const apiResults = await searchDiseasesBySymptoms(keywords);
@@ -363,20 +422,26 @@ export default function DiagnosisAssistant() {
       setResults(matchResults);
       setSelectedDisease(matchResults[0] || null);
       
-      saveToRecentSearches(prompt);
+      saveToRecentSearches(analysisText);
 
       if (matchResults.length === 0) {
         toast.error('No matches found. Try mentioning specific symptoms like "fever", "cough", or "pain"');
       } else {
         toast.success(`Found ${matchResults.length} potential matches`);
       }
+
+      // Automatically speak the analysis results
+      setTimeout(() => {
+        speakAnalysis(matchResults);
+      }, 1000);
+
     } catch (err) {
       toast.error('Analysis failed. Please try again.');
       console.error('Analysis error:', err);
     } finally {
       setAnalyzing(false);
     }
-  }, [prompt, extractKeywords, searchDiseasesBySymptoms, convertToMatchResults, saveToRecentSearches]);
+  }, [prompt, extractKeywords, searchDiseasesBySymptoms, convertToMatchResults, saveToRecentSearches, speakAnalysis]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -398,7 +463,8 @@ export default function DiagnosisAssistant() {
     setResults([]);
     setSelectedDisease(null);
     setShowAllResults(false);
-  }, []);
+    stopSpeaking();
+  }, [stopSpeaking]);
 
   // Use example
   const useExample = useCallback(() => {
@@ -475,12 +541,9 @@ export default function DiagnosisAssistant() {
         <CardTitle className="flex items-center gap-3">
           <ScanHeart className="w-6 h-6 text-primary" />
           Symptom Analysis Assistant
-          <Badge variant="outline" className="ml-auto">
-            {diseases.length} diseases in database
-          </Badge>
         </CardTitle>
         <p className="text-muted-foreground">
-          Describe your symptoms in natural language for potential disease matches and recommendations.
+          Describe your symptoms in natural language or use voice input for instant analysis and recommendations.
         </p>
       </CardHeader>
       
@@ -492,14 +555,41 @@ export default function DiagnosisAssistant() {
               <label htmlFor="symptoms" className="text-sm font-medium">
                 Describe Your Symptoms
               </label>
-              <Textarea
-                id="symptoms"
-                placeholder="Example: I have a high fever, headache, and body aches for the past 2 days..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={6}
-                className="resize-none"
-              />
+              <div className="relative">
+                <Textarea
+                  id="symptoms"
+                  placeholder="Example: I have a high fever, headache, and body aches for the past 2 days..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={6}
+                  className="resize-none pr-12"
+                />
+                {/* Speech Recognition Button */}
+                {speechSupported && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`absolute top-2 right-2 p-2 ${
+                      isListening 
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    }`}
+                    onClick={isListening ? stopListening : startListening}
+                    disabled={analyzing}
+                  >
+                    {isListening ? (
+                      <MicOff className="w-4 h-4" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              {speechSupported && (
+                <p className="text-xs text-muted-foreground">
+                  💡 Click the microphone button to speak your symptoms directly
+                </p>
+              )}
             </div>
 
             {/* Extracted Keywords */}
@@ -527,7 +617,7 @@ export default function DiagnosisAssistant() {
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3">
               <Button
-                onClick={analyzeSymptoms}
+                onClick={() => analyzeSymptoms()}
                 disabled={analyzing || !prompt.trim()}
                 className="min-w-32"
               >
@@ -551,6 +641,14 @@ export default function DiagnosisAssistant() {
               <Button variant="ghost" onClick={useExample}>
                 Use Example
               </Button>
+
+              {/* Stop Speaking Button */}
+              {isSpeaking && (
+                <Button variant="outline" onClick={stopSpeaking}>
+                  <VolumeX className="w-4 h-4 mr-2" />
+                  Stop Reading
+                </Button>
+              )}
             </div>
 
             {/* Recent Searches */}
@@ -559,13 +657,25 @@ export default function DiagnosisAssistant() {
                 <label className="text-sm font-medium">Recent Searches</label>
                 <div className="space-y-1">
                   {recentSearches.map((search, index) => (
-                    <button
+                    <div
                       key={index}
-                      onClick={() => setPrompt(search)}
-                      className="block w-full text-left text-sm text-muted-foreground hover:text-foreground p-2 rounded hover:bg-muted truncate"
+                      className="flex items-center gap-2 p-2 rounded hover:bg-muted group"
                     >
-                      {search}
-                    </button>
+                      <button
+                        onClick={() => setPrompt(search)}
+                        className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate"
+                      >
+                        {search}
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                        onClick={() => deleteFromRecentSearches(search)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -675,28 +785,6 @@ export default function DiagnosisAssistant() {
                           Copy
                         </Button>
                         
-                        {/* Voice Assistant Button */}
-                        {isVoiceEnabled && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={isSpeaking ? stopSpeaking : speakRecommendation}
-                            className={isSpeaking ? "bg-green-50 border-green-200 text-green-700" : ""}
-                          >
-                            {isSpeaking ? (
-                              <>
-                                <VolumeX className="w-4 h-4 mr-2" />
-                                Stop Voice
-                              </>
-                            ) : (
-                              <>
-                                <Volume2 className="w-4 h-4 mr-2" />
-                                Voice Assistant
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        
                         <Button variant="outline" size="sm" onClick={saveNote}>
                           Save Note
                         </Button>
@@ -709,15 +797,15 @@ export default function DiagnosisAssistant() {
                         </Button>
                       </div>
 
-                      {/* Voice Assistant Info */}
-                      {isVoiceEnabled && (
-                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      {/* Voice Features Info */}
+                      {speechSupported && (
+                        <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
                           <div className="flex items-start gap-2">
-                            <Mic className="w-4 h-4 text-blue-600 mt-0.5" />
+                            <Volume2 className="w-4 h-4 text-blue-600 mt-0.5" />
                             <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">AI Voice Assistant Available</p>
+                              <p className="font-medium mb-1">🎤 Voice-Enabled Analysis</p>
                               <p className="text-xs text-blue-600">
-                                Click "Voice Assistant" to hear the treatment recommendations read aloud with reassuring guidance.
+                                Use the microphone button to speak your symptoms. Analysis results will be automatically read aloud!
                               </p>
                             </div>
                           </div>
