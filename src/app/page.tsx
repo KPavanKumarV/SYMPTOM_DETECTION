@@ -1,6 +1,6 @@
 import DiagnosisAssistant from '@/components/DiagnosisAssistant';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Stethoscope, Brain, AlertTriangle } from 'lucide-react';
+import { Stethoscope, AlertTriangle } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -23,10 +23,6 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <Brain className="w-4 h-4" />
-                <span>Pattern Recognition v3.0</span>
-              </div>
               <ThemeToggle />
             </div>
           </div>
@@ -62,10 +58,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4" />
-                <span>Powered by Advanced Pattern Recognition</span>
-              </div>
+              {/* Empty space for potential future content */}
             </div>
           </div>
         </div>
