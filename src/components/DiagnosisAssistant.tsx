@@ -170,28 +170,53 @@ export default function DiagnosisAssistant() {
     }
   }, []);
 
-  // Initialize speech recognition
+  // Initialize speech recognition with improved settings
   useEffect(() => {
     if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
       const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.continuous = true; // Enable continuous listening
+      recognition.interimResults = true; // Show interim results
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+
+      let finalTranscript = '';
+      let interimTranscript = '';
 
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setSymptoms(transcript);
-        setIsListening(false);
-        
-        // Auto-analyze after speech input
-        setTimeout(() => {
-          analyzeSymptoms(transcript);
-        }, 500);
+        finalTranscript = '';
+        interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        // Update symptoms with the final transcript
+        if (finalTranscript) {
+          setSymptoms(prev => prev + (prev ? ' ' : '') + finalTranscript);
+        }
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
         setIsListening(false);
-        toast.error('Speech recognition failed');
+        
+        if (event.error === 'no-speech') {
+          toast.error('No speech detected. Please try again.');
+        } else if (event.error === 'network') {
+          toast.error('Network error. Please check your connection.');
+        } else {
+          toast.error('Speech recognition failed. Please try again.');
+        }
+      };
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast.success('🎤 Listening... Click mic again to stop');
       };
 
       recognition.onend = () => {
@@ -204,17 +229,21 @@ export default function DiagnosisAssistant() {
 
   const toggleSpeechRecognition = () => {
     if (!speechRecognition) {
-      toast.error('Speech recognition not supported');
+      toast.error('Speech recognition not supported in this browser');
       return;
     }
 
     if (isListening) {
       speechRecognition.stop();
       setIsListening(false);
+      toast.success('🛑 Stopped listening');
     } else {
-      speechRecognition.start();
-      setIsListening(true);
-      toast.success('Listening... Speak your symptoms');
+      try {
+        speechRecognition.start();
+      } catch (error) {
+        toast.error('Failed to start speech recognition');
+        setIsListening(false);
+      }
     }
   };
 
@@ -301,11 +330,11 @@ export default function DiagnosisAssistant() {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
-      <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+      <Card className="shadow-lg border-0 card-glass">
         <CardContent className="p-6">
           <div className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-800 mb-2">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
                 Describe Your Symptoms
               </h2>
               <div className="relative">
@@ -313,25 +342,34 @@ export default function DiagnosisAssistant() {
                   placeholder="Example: I have itching and skin rash, or stomach pain with acidity..."
                   value={symptoms}
                   onChange={(e) => setSymptoms(e.target.value)}
-                  className="min-h-[100px] pr-12 resize-none"
+                  className="min-h-[100px] pr-12 resize-none bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
                 />
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`absolute top-2 right-2 h-8 w-8 p-0 ${
-                    isListening ? 'text-red-500' : 'text-slate-500 hover:text-teal-600'
+                  className={`absolute top-2 right-2 h-8 w-8 p-0 transition-all duration-200 ${
+                    isListening 
+                      ? 'text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 animate-pulse' 
+                      : 'text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20'
                   }`}
                   onClick={toggleSpeechRecognition}
+                  title={isListening ? 'Stop listening' : 'Start voice input'}
                 >
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </Button>
               </div>
+              {isListening && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1 flex items-center gap-1">
+                  <span className="animate-pulse">🔴</span>
+                  Recording... Click mic button to stop
+                </p>
+              )}
             </div>
 
             <Button
               onClick={() => analyzeSymptoms()}
               disabled={isAnalyzing || !symptoms.trim()}
-              className="w-full bg-teal-600 hover:bg-teal-700"
+              className="w-full bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600 transition-all duration-200"
             >
               {isAnalyzing ? (
                 <>Analyzing with pattern recognition...</>
@@ -345,13 +383,13 @@ export default function DiagnosisAssistant() {
 
             {recentSearches.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium text-slate-600">Recent Searches</h3>
+                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400">Recent Searches</h3>
                 <div className="flex flex-wrap gap-2">
                   {recentSearches.map((search, index) => (
                     <div key={index} className="group relative">
                       <Badge
                         variant="secondary"
-                        className="cursor-pointer hover:bg-slate-200 pr-6"
+                        className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 pr-6 transition-colors duration-200"
                         onClick={() => setSymptoms(search)}
                       >
                         {search.length > 30 ? `${search.substring(0, 30)}...` : search}
@@ -359,7 +397,7 @@ export default function DiagnosisAssistant() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="absolute -top-1 -right-1 h-4 w-4 p-0 opacity-0 group-hover:opacity-100 bg-red-100 hover:bg-red-200 text-red-600"
+                        className="absolute -top-1 -right-1 h-4 w-4 p-0 opacity-0 group-hover:opacity-100 bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 transition-all duration-200"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteRecentSearch(search);
@@ -377,17 +415,17 @@ export default function DiagnosisAssistant() {
       </Card>
 
       {results.length > 0 && (
-        <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+        <Card className="shadow-lg border-0 card-glass">
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">
               Pattern Recognition Results ({results.length} matches found)
             </h3>
             <div className="space-y-4">
               {results.map((result) => (
-                <div key={result.id} className="border rounded-lg p-4 bg-slate-50/50">
+                <div key={result.id} className="border rounded-lg p-4 bg-slate-50/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 transition-colors duration-200">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <h4 className="font-semibold text-slate-800">{result.disease_name}</h4>
+                      <h4 className="font-semibold text-slate-800 dark:text-slate-200">{result.disease_name}</h4>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant={result.confidence === 'High' ? 'default' : 'secondary'}>
                           {result.similarity}% Pattern Match
@@ -399,12 +437,13 @@ export default function DiagnosisAssistant() {
                       variant="ghost"
                       size="sm"
                       onClick={() => speakResult(`${result.disease_name}. ${result.medicine_measures}`)}
-                      className="text-slate-500 hover:text-teal-600"
+                      className="text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors duration-200"
+                      title="Listen to result"
                     >
                       <Volume2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-sm text-slate-600 leading-relaxed">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                     <span className="font-medium">Treatment: </span>
                     {result.medicine_measures}
                   </p>

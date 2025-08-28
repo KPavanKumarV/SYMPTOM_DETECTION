@@ -1,29 +1,33 @@
 import DiagnosisAssistant from '@/components/DiagnosisAssistant';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Stethoscope, Brain, AlertTriangle } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-teal-50">
+    <div className="min-h-screen bg-medical-light dark:bg-medical-dark transition-colors duration-300">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b header-glass sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-teal-100 to-blue-100 rounded-lg">
-                <Stethoscope className="w-6 h-6 text-teal-600" />
+              <div className="p-2 bg-gradient-to-br from-teal-100 to-blue-100 dark:from-teal-900/50 dark:to-blue-900/50 rounded-lg">
+                <Stethoscope className="w-6 h-6 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-slate-900">
+                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
                   Medical Diagnosis Assistant
                 </h1>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   AI-powered symptom analysis with pattern recognition
                 </p>
               </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-              <Brain className="w-4 h-4" />
-              <span>Pattern Recognition v3.0</span>
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <Brain className="w-4 h-4" />
+                <span>Pattern Recognition v3.0</span>
+              </div>
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -33,10 +37,10 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         {/* Instructions */}
         <div className="max-w-4xl mx-auto mb-6">
-          <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-slate-200">
+          <div className="card-glass rounded-lg p-4 border border-slate-200 dark:border-slate-700 shadow-lg">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />
-              <div className="text-sm text-slate-700">
+              <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400 mt-0.5" />
+              <div className="text-sm text-slate-700 dark:text-slate-300">
                 <p className="font-medium mb-1">Important Disclaimer</p>
                 <p className="text-xs leading-relaxed">
                   This tool provides informational suggestions only and should not replace professional medical advice. 
@@ -54,10 +58,10 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t bg-white/60 backdrop-blur-sm mt-16">
+      <footer className="border-t header-glass mt-16">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-4 text-sm text-slate-600">
+            <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex items-center gap-2">
                 <Brain className="w-4 h-4" />
                 <span>Powered by Advanced Pattern Recognition</span>
