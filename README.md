@@ -268,10 +268,3 @@ For questions, feedback, or collaboration opportunities:
 
 **Built with ❤️ for improving preliminary medical assessments and health education**
 
-## 🎓 Resume Summary
-
-### Tech Stack (1 line)
-Next.js 15, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Web Speech API, Custom AI Pattern Recognition Algorithms, Medical Dataset Integration (130+ symptoms, 4 diseases)
-
-### Project Importance (3-4 lines)
-Developed a full-stack AI-powered medical diagnosis web application that analyzes patient symptoms using custom pattern recognition algorithms trained on a comprehensive medical dataset of 130+ symptoms across 4 disease categories. Implemented advanced features including real-time speech-to-text input, automated text-to-speech results, and intelligent fuzzy matching algorithms with confidence scoring. The application demonstrates expertise in healthcare technology, machine learning integration, modern web development practices, and creates real-world value by providing preliminary medical insights to users while maintaining professional medical disclaimers and ethical guidelines.
