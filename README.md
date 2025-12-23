@@ -261,7 +261,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions, feedback, or collaboration opportunities:
 
-- **Project Link**: [https://github.com/yourusername/medical-diagnosis-assistant](https://github.com/yourusername/medical-diagnosis-assistant)
+- **Project Link**: https://github.com/KPavanKumarV/SYMPTOM_DETECTION
 - **Issues**: [Report a bug or request a feature](https://github.com/yourusername/medical-diagnosis-assistant/issues)
 
 ---
